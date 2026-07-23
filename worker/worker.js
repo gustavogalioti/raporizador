@@ -15,24 +15,28 @@
  * WORKER_URL no topo do <script> do index.html.
  */
 
-const SYSTEM_PROMPT = `Você monta um "quadro de rapport" para alguém que precisa parecer que entende de um assunto durante uma ligação de vendas, mesmo sem ser especialista. Gere conteúdo curto, direto, fácil de ler em poucos segundos, em português do Brasil.
+const BOARD_SYSTEM_PROMPT = `Você monta um "quadro de rapport" para alguém que precisa parecer que entende de um assunto durante uma ligação de vendas, mesmo sem ser especialista. Gere conteúdo curto, direto, fácil de ler em poucos segundos, em português do Brasil.
 
 Adapte o conteúdo ao TIPO de assunto:
-- Se for um setor/mercado: em "principais_nomes" liste as marcas/empresas mais faladas do setor, cada uma com uma frase de curiosidade real sobre ela.
-- Se for um produto específico (carro, celular etc): em "principais_nomes" liste a marca, o modelo/concorrentes diretos, cada um com uma info factual curta.
-- Se for comida/bebida: em "principais_nomes" liste país de origem, variações famosas ou marcas associadas, cada uma com uma curiosidade (história, como se faz, etc).
+- Se for um setor/mercado: em "principais_nomes" liste as marcas/empresas mais faladas do setor.
+- Se for um produto específico (carro, celular etc): em "principais_nomes" liste a marca e os principais concorrentes diretos.
+- Se for comida/bebida: em "principais_nomes" liste país de origem, variações famosas ou marcas associadas.
 - Se for um tema geral (esporte, hobby, tecnologia): liste os nomes/entidades mais relevantes e citados sobre o tema.
 
 Responda ESTRITAMENTE em JSON, sem markdown, sem texto antes ou depois, seguindo exatamente este schema:
 {
   "definicao_curta": "string, 1-2 frases, explica o assunto de forma simples",
   "principais_topicos": ["4 a 6 strings curtas, sub-temas que valem puxar assunto"],
-  "principais_nomes": [{"nome": "string", "info": "string curta, 1 frase"}] (3 a 5 itens),
+  "principais_nomes": [{"nome": "string", "info": "string, 2 frases curtas, com pelo menos um dado concreto: número, ano ou feito específico"}] (SEMPRE gere no mínimo 4 e no ideal 5 a 6 itens, nunca menos que 3),
   "curiosidades": ["3 a 5 strings, fatos curiosos e verdadeiros sobre o assunto"],
   "perguntas": ["4 a 6 perguntas curtas que a pessoa pode fazer ao interlocutor sobre o tema"],
   "opinioes": ["3 a 5 frases curtas em primeira pessoa, opiniões plausíveis e neutras/positivas que a pessoa pode 'soltar' como se fossem dela"]
 }
 Todo o conteúdo deve ser factualmente correto e verificável. Nada de invenções sobre marcas ou fatos.`;
+
+const DETAIL_SYSTEM_PROMPT = `Você ajuda alguém a se aprofundar rapidamente num ponto específico durante uma ligação de vendas. A pessoa já tem uma visão geral do assunto e quer entender melhor um item pontual que apareceu no quadro dela.
+
+Escreva de 2 a 4 parágrafos curtos, em português do Brasil, tom direto e conversável (não acadêmico), trazendo informações factuais e específicas (números, nomes, datas, exemplos concretos) que ajudem a pessoa a comentar esse ponto com naturalidade numa call. Não repita a definição geral do assunto todo, vá direto ao detalhe do item pedido. Não use markdown, apenas parágrafos separados por uma linha em branco. Tudo deve ser factualmente correto — nada de invenções.`;
 
 // Troque "*" pela origem exata do seu site (ex: "https://gustavogalioti.github.io")
 // quando quiser travar o acesso só ao seu domínio.
@@ -60,8 +64,57 @@ export default {
     }
 
     try {
-      const { tema } = await request.json();
+      const { tema, item } = await request.json();
 
+      // ---- modo detalhe: aprofundar um item específico do quadro ----
+      if (item && typeof item === "string" && item.trim()) {
+        const detalheResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.6,
+            max_tokens: 700,
+            messages: [
+              { role: "system", content: DETAIL_SYSTEM_PROMPT },
+              {
+                role: "user",
+                content: `Assunto geral: ${tema || "(não informado)"}\nItem específico para detalhar: ${item.trim()}`,
+              },
+            ],
+          }),
+        });
+
+        if (!detalheResponse.ok) {
+          const errText = await detalheResponse.text();
+          return new Response(
+            JSON.stringify({ error: "Erro na API da Groq", detail: errText }),
+            {
+              status: detalheResponse.status,
+              headers: { "Content-Type": "application/json", ...corsHeaders() },
+            }
+          );
+        }
+
+        const detalheData = await detalheResponse.json();
+        const detalheTexto = detalheData.choices?.[0]?.message?.content;
+
+        if (!detalheTexto) {
+          return new Response(JSON.stringify({ error: "Resposta sem texto." }), {
+            status: 502,
+            headers: { "Content-Type": "application/json", ...corsHeaders() },
+          });
+        }
+
+        return new Response(JSON.stringify({ detalhe: detalheTexto.trim() }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        });
+      }
+
+      // ---- modo quadro: gerar o quadro completo a partir do tema ----
       if (!tema || typeof tema !== "string" || !tema.trim()) {
         return new Response(JSON.stringify({ error: "Envie um 'tema' válido." }), {
           status: 400,
@@ -78,9 +131,10 @@ export default {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           temperature: 0.6,
+          max_tokens: 1800,
           response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: SYSTEM_PROMPT },
+            { role: "system", content: BOARD_SYSTEM_PROMPT },
             { role: "user", content: `Assunto: ${tema.trim()}` },
           ],
         }),

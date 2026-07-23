@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Raporizador</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Kalam:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Kalam:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --board: #fbfbf8;
@@ -84,10 +84,10 @@
   /* ---- header ---- */
   header{ position:relative; z-index:2; text-align:center; margin-bottom: 6px;}
   .brand{
-    font-family:'Permanent Marker', cursive;
-    font-size: clamp(30px, 5vw, 46px);
+    font-family:'Patrick Hand', cursive;
+    font-size: clamp(34px, 5.6vw, 52px);
     color: var(--ink-black);
-    letter-spacing: 1px;
+    letter-spacing: .5px;
     transform: rotate(-1.2deg);
     display:inline-block;
   }
@@ -121,8 +121,8 @@
   }
   .search-row input::placeholder{ color:#9aa0a8; font-family:'Inter',sans-serif; font-size:15px; }
   .go-btn{
-    font-family:'Permanent Marker', cursive;
-    font-size: 15px;
+    font-family:'Patrick Hand', cursive;
+    font-size: 17px;
     letter-spacing: .5px;
     color:#fff;
     background: var(--ink-blue);
@@ -207,11 +207,11 @@
   @media (max-width: 640px){ .card.wide{ grid-column: span 1; } }
 
   .card h3{
-    font-family:'Permanent Marker', cursive;
-    font-size: 15px;
+    font-family:'Patrick Hand', cursive;
+    font-size: 18px;
     color: var(--c-ink);
     margin: 4px 0 10px;
-    letter-spacing: .3px;
+    letter-spacing: .4px;
   }
   .card p, .card li{
     font-size: 14px;
@@ -231,6 +231,67 @@
   .card .op-item:last-child{ margin-bottom:0; }
   .card .pergunta-item{ margin-bottom:9px; padding-left:20px; position:relative; }
   .card .pergunta-item::before{ content:"?"; position:absolute; left:0; top:0; color: var(--c-ink); font-weight:800; }
+
+  /* ---- itens clicáveis ---- */
+  .clickable{
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background-color .12s ease, transform .12s ease;
+  }
+  .clickable:hover{
+    background-color: rgba(0,0,0,0.06);
+    text-decoration: underline dashed;
+    text-underline-offset: 3px;
+  }
+  .clickable:active{ transform: scale(0.98); }
+  li.clickable{ list-style-position: outside; margin-left:-4px; padding: 1px 4px 1px 4px; }
+  .nome-item.clickable, .pergunta-item.clickable, .op-item.clickable{ padding: 2px 6px; margin-left:-6px; }
+
+  /* ---- modal de detalhe ---- */
+  .modal-overlay{
+    position: fixed; inset:0;
+    background: rgba(20,22,26,0.55);
+    display:flex; align-items:center; justify-content:center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-overlay.hidden{ display:none; }
+  .modal-note{
+    background: #fffdf3;
+    max-width: 560px; width:100%;
+    max-height: 80vh;
+    overflow-y:auto;
+    border-radius: 4px;
+    padding: 22px 24px 26px;
+    box-shadow: 0 24px 50px -12px rgba(0,0,0,0.45);
+    position:relative;
+    transform: rotate(-0.4deg);
+  }
+  .modal-close{
+    position:absolute; top:10px; right:14px;
+    font-family:'Patrick Hand', cursive;
+    font-size: 22px;
+    color:#666;
+    background:none; border:none; cursor:pointer;
+    line-height:1;
+  }
+  .modal-close:hover{ color: var(--ink-red); }
+  .modal-title{
+    font-family:'Patrick Hand', cursive;
+    font-size: 22px;
+    color: var(--ink-blue);
+    margin: 0 30px 12px 0;
+  }
+  .modal-body p{
+    font-family:'Inter', sans-serif;
+    font-size: 14.5px;
+    line-height:1.6;
+    color:#2c2f34;
+    margin: 0 0 12px;
+  }
+  .modal-body p:last-child{ margin-bottom:0; }
+  .modal-loading{ color:#8a909a; font-size:14px; }
+  .modal-loading .scribble{ width:120px; height:40px; margin: 4px 0 10px; }
 
   .error-note{
     position:relative; z-index:2;
@@ -292,6 +353,14 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-note">
+    <button class="modal-close" id="modalClose">✕</button>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
 <script>
 // COLE AQUI a URL do seu Worker do Cloudflare depois do deploy.
 // Exemplo: "https://raporizador-api.seu-usuario.workers.dev"
@@ -306,8 +375,19 @@ const grid = document.getElementById('grid');
 const errorBox = document.getElementById('errorBox');
 const recentsBox = document.getElementById('recents');
 const footerHint = document.getElementById('footerHint');
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalBody = document.getElementById('modalBody');
+const modalClose = document.getElementById('modalClose');
 
 let recents = [];
+let temaAtual = '';
+let itemRegistry = [];
+
+function registrarItem(texto){
+  itemRegistry.push(texto);
+  return itemRegistry.length - 1;
+}
 
 function renderRecents(){
   recentsBox.innerHTML = '';
@@ -348,27 +428,36 @@ function cardTemplate(bg, ink, title, innerHtml, wide=false){
 
 function renderResultado(data, tema){
   const rot = [-1.5, 1, -0.8, 1.6, -1.2, 0.9];
+  itemRegistry = [];
   let html = '';
 
   html += cardTemplate('var(--note-yellow)', 'var(--ink-black)', 'DEFINIÇÃO CURTA',
     `<p>${escapeHtml(data.definicao_curta)}</p>`, true);
 
   html += cardTemplate('var(--note-blue)', 'var(--ink-blue)', 'PRINCIPAIS TÓPICOS',
-    `<ul>${(data.principais_topicos||[]).map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>`);
+    `<ul>${(data.principais_topicos||[]).map(t=>
+      `<li class="clickable" onclick="abrirDetalhe(${registrarItem(t)})">${escapeHtml(t)}</li>`
+    ).join('')}</ul>`);
 
   html += cardTemplate('var(--note-pink)', 'var(--ink-red)', 'PRINCIPAIS NOMES',
     `<div>${(data.principais_nomes||[]).map(n=>
-      `<div class="nome-item"><span class="nome-nome">${escapeHtml(n.nome)}</span><span class="nome-info">${escapeHtml(n.info)}</span></div>`
+      `<div class="nome-item clickable" onclick="abrirDetalhe(${registrarItem(n.nome)})"><span class="nome-nome">${escapeHtml(n.nome)}</span><span class="nome-info">${escapeHtml(n.info)}</span></div>`
     ).join('')}</div>`);
 
   html += cardTemplate('var(--note-green)', 'var(--ink-green)', 'CURIOSIDADES',
-    `<ul>${(data.curiosidades||[]).map(c=>`<li>${escapeHtml(c)}</li>`).join('')}</ul>`);
+    `<ul>${(data.curiosidades||[]).map(c=>
+      `<li class="clickable" onclick="abrirDetalhe(${registrarItem(c)})">${escapeHtml(c)}</li>`
+    ).join('')}</ul>`);
 
   html += cardTemplate('var(--note-lavender)', 'var(--ink-purple)', 'PERGUNTAS PRA FAZER',
-    `<div>${(data.perguntas||[]).map(p=>`<div class="pergunta-item">${escapeHtml(p)}</div>`).join('')}</div>`);
+    `<div>${(data.perguntas||[]).map(p=>
+      `<div class="pergunta-item clickable" onclick="abrirDetalhe(${registrarItem(p)})">${escapeHtml(p)}</div>`
+    ).join('')}</div>`);
 
   html += cardTemplate('var(--note-orange)', 'var(--ink-orange)', 'OPINIÃO PRA DAR',
-    `<div>${(data.opinioes||[]).map(o=>`<div class="op-item">${escapeHtml(o)}</div>`).join('')}</div>`);
+    `<div>${(data.opinioes||[]).map(o=>
+      `<div class="op-item clickable" onclick="abrirDetalhe(${registrarItem(o)})">${escapeHtml(o)}</div>`
+    ).join('')}</div>`);
 
   grid.innerHTML = html;
 
@@ -406,6 +495,7 @@ async function gerar(){
     }
 
     renderResultado(data, tema);
+    temaAtual = tema;
     pushRecent(tema);
 
   } catch(err){
@@ -418,6 +508,53 @@ async function gerar(){
 
 goBtn.addEventListener('click', gerar);
 input.addEventListener('keydown', (e) => { if(e.key === 'Enter') gerar(); });
+
+/* ---- modal de detalhe ---- */
+
+function fecharModal(){
+  modalOverlay.classList.add('hidden');
+  modalBody.innerHTML = '';
+}
+
+modalClose.addEventListener('click', fecharModal);
+modalOverlay.addEventListener('click', (e) => { if(e.target === modalOverlay) fecharModal(); });
+document.addEventListener('keydown', (e) => { if(e.key === 'Escape') fecharModal(); });
+
+async function abrirDetalhe(idx){
+  const item = itemRegistry[idx];
+  if(!item) return;
+
+  modalTitle.textContent = item;
+  modalBody.innerHTML = `<div class="modal-loading">
+    <svg class="scribble" viewBox="0 0 150 50">
+      <path d="M5 40 Q 30 5, 55 30 T 100 25 T 145 15" fill="none" stroke="#1e40c9" stroke-width="4" stroke-linecap="round"/>
+    </svg>
+    Aprofundando...
+  </div>`;
+  modalOverlay.classList.remove('hidden');
+
+  try{
+    const response = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tema: temaAtual, item })
+    });
+
+    const data = await response.json();
+
+    if(!response.ok){
+      throw new Error(data.error || ('Falha na requisição: ' + response.status));
+    }
+
+    const paragrafos = (data.detalhe || '').split(/\n\s*\n/).filter(p => p.trim());
+    modalBody.innerHTML = paragrafos.map(p => `<p>${escapeHtml(p.trim())}</p>`).join('') ||
+      `<p>Não veio conteúdo dessa vez. Tenta fechar e clicar de novo.</p>`;
+
+  } catch(err){
+    console.error(err);
+    modalBody.innerHTML = `<p>Não consegui buscar mais detalhes agora. Tenta de novo em alguns segundos.</p>`;
+  }
+}
 </script>
 </body>
 </html>
