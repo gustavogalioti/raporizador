@@ -1,12 +1,14 @@
 /**
  * RAPORIZADOR - Worker de backend
  *
- * Guarda a chave da API da Anthropic em segredo (nunca exposta ao navegador)
+ * Guarda a chave da API da Groq em segredo (nunca exposta ao navegador)
  * e faz o proxy da chamada que o frontend (index.html) precisa fazer.
+ * Usa o Llama 3.3 70B via Groq — API gratuita, sem cartão de crédito.
  *
  * Configuração necessária no painel do Cloudflare, depois de colar este código:
- *   Settings -> Variables and Secrets -> Add
- *   Nome: ANTHROPIC_API_KEY   |   Tipo: Secret   |   Valor: sua chave da Anthropic
+ *   1. Gere uma chave grátis em https://console.groq.com/keys
+ *   2. No Worker: Settings -> Variables and Secrets -> Add
+ *      Nome: GROQ_API_KEY   |   Tipo: Secret   |   Valor: sua chave da Groq
  *
  * Depois do deploy, copie a URL (algo como
  * https://raporizador-api.SEU-SUBDOMINIO.workers.dev) e cole na constante
@@ -67,43 +69,45 @@ export default {
         });
       }
 
-      const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      const groqResponse = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
+          "Authorization": `Bearer ${env.GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: `Assunto: ${tema.trim()}` }],
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.6,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: `Assunto: ${tema.trim()}` },
+          ],
         }),
       });
 
-      if (!anthropicResponse.ok) {
-        const errText = await anthropicResponse.text();
+      if (!groqResponse.ok) {
+        const errText = await groqResponse.text();
         return new Response(
-          JSON.stringify({ error: "Erro na API da Anthropic", detail: errText }),
+          JSON.stringify({ error: "Erro na API da Groq", detail: errText }),
           {
-            status: anthropicResponse.status,
+            status: groqResponse.status,
             headers: { "Content-Type": "application/json", ...corsHeaders() },
           }
         );
       }
 
-      const data = await anthropicResponse.json();
-      const textBlock = (data.content || []).find((b) => b.type === "text");
+      const data = await groqResponse.json();
+      const rawContent = data.choices?.[0]?.message?.content;
 
-      if (!textBlock) {
+      if (!rawContent) {
         return new Response(JSON.stringify({ error: "Resposta sem texto." }), {
           status: 502,
           headers: { "Content-Type": "application/json", ...corsHeaders() },
         });
       }
 
-      const clean = textBlock.text
+      const clean = rawContent
         .trim()
         .replace(/^```json/i, "")
         .replace(/^```/, "")

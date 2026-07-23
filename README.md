@@ -30,12 +30,13 @@ esse Worker uma vez:
 4. Apague o código de exemplo e cole o conteúdo do arquivo [`worker/worker.js`](worker/worker.js) deste repositório
 5. Clique em **Deploy** de novo
 
-### 2. Adicionar a chave da Anthropic (secreta)
+### 2. Adicionar a chave da Groq (secreta e gratuita)
 
-1. No painel do Worker, vá em **Settings** → **Variables and Secrets**
-2. Clique em **Add** → tipo **Secret**
-3. Nome: `ANTHROPIC_API_KEY` — Valor: sua chave da API da Anthropic
-4. Salve
+1. Gere uma chave grátis em [console.groq.com/keys](https://console.groq.com/keys) (não pede cartão de crédito)
+2. No painel do Worker, vá em **Settings** → **Variables and Secrets**
+3. Clique em **Add** → tipo **Secret**
+4. Nome: `GROQ_API_KEY` — Valor: a chave que você gerou
+5. Salve
 
 ### 3. Ligar o frontend ao Worker
 
@@ -49,7 +50,11 @@ funciona de ponta a ponta, sem nenhuma chave exposta no navegador.
 ## Status
 
 Protótipo funcional. Frontend estático (GitHub Pages) + backend serverless
-(Cloudflare Worker) guardando a chave da API.
+(Cloudflare Worker) rodando Llama 3.3 70B via Groq (gratuito).
+
+Se no futuro a qualidade das respostas precisar melhorar, é só trocar a
+chamada dentro de `worker/worker.js` por outro provedor (Anthropic, OpenAI,
+Gemini) — o resto do sistema (frontend, formato do JSON) não muda.
 
 Próximo passo: plugar numa base de conhecimento própria da C2 (RAG) em vez de
 depender só do conhecimento geral do modelo.
