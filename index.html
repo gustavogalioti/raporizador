@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raporizador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Kalam:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board: #fbfbf8;
+    --frame: #c7ccd3;
+    --frame-dark: #9aa0a8;
+    --ink-blue: #1e40c9;
+    --ink-black: #232323;
+    --ink-red: #c23b2d;
+    --ink-green: #1c8a5a;
+    --ink-purple: #6d35c9;
+    --ink-orange: #d9720f;
+    --note-yellow: #fff3b0;
+    --note-pink: #ffd9e3;
+    --note-blue: #d8ebff;
+    --note-green: #dcf7e3;
+    --note-orange: #ffe4c2;
+    --note-lavender: #ebdcff;
+  }
+
+  *{ box-sizing: border-box; }
+
+  body{
+    margin:0;
+    min-height:100vh;
+    background: #e8ebee;
+    font-family: 'Inter', sans-serif;
+    display:flex;
+    justify-content:center;
+    padding: 28px 14px 60px;
+  }
+
+  .rig{
+    width:100%;
+    max-width: 1180px;
+  }
+
+  /* ---- whiteboard shell ---- */
+  .board-frame{
+    background: linear-gradient(180deg, #d7dbe0, #b9bfc7);
+    border-radius: 18px;
+    padding: 16px;
+    box-shadow: 0 30px 60px -20px rgba(20,25,35,0.35), inset 0 0 0 1px rgba(255,255,255,0.4);
+    position: relative;
+  }
+  .board-frame::before, .board-frame::after,
+  .clip-l, .clip-r{
+    content:"";
+    position:absolute;
+    width:34px; height:14px;
+    background: linear-gradient(180deg,#f3f5f7,#b3b9c1);
+    border-radius: 4px;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.8);
+    top:-7px;
+  }
+  .board-frame::before{ left: 40px; }
+  .board-frame::after{ right: 40px; }
+
+  .board{
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.028) 0 1px, transparent 1px 34px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.028) 0 1px, transparent 1px 34px),
+      var(--board);
+    border-radius: 10px;
+    min-height: 620px;
+    padding: 30px clamp(16px,4vw,44px) 44px;
+    position: relative;
+    overflow: hidden;
+  }
+  .board::after{ /* faint sheen */
+    content:"";
+    position:absolute; inset:0;
+    background: radial-gradient(ellipse at 15% -10%, rgba(255,255,255,0.9), transparent 45%);
+    pointer-events:none;
+  }
+
+  /* ---- header ---- */
+  header{ position:relative; z-index:2; text-align:center; margin-bottom: 6px;}
+  .brand{
+    font-family:'Permanent Marker', cursive;
+    font-size: clamp(30px, 5vw, 46px);
+    color: var(--ink-black);
+    letter-spacing: 1px;
+    transform: rotate(-1.2deg);
+    display:inline-block;
+  }
+  .brand span{ color: var(--ink-blue); }
+  .tagline{
+    font-size: 14px;
+    color:#5b6270;
+    margin-top: 2px;
+    font-weight: 500;
+  }
+
+  /* ---- input row ---- */
+  .search-row{
+    position:relative; z-index:2;
+    max-width: 620px;
+    margin: 22px auto 8px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  .search-row input{
+    flex:1;
+    font-family:'Kalam', cursive;
+    font-size: 20px;
+    color: var(--ink-blue);
+    background: transparent;
+    border:none;
+    border-bottom: 3px solid #333;
+    padding: 8px 4px 10px;
+    outline:none;
+  }
+  .search-row input::placeholder{ color:#9aa0a8; font-family:'Inter',sans-serif; font-size:15px; }
+  .go-btn{
+    font-family:'Permanent Marker', cursive;
+    font-size: 15px;
+    letter-spacing: .5px;
+    color:#fff;
+    background: var(--ink-blue);
+    border:none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    cursor:pointer;
+    box-shadow: 0 3px 0 #12328f;
+    transition: transform .08s ease;
+  }
+  .go-btn:active{ transform: translateY(2px); box-shadow: 0 1px 0 #12328f; }
+  .go-btn:disabled{ opacity:.55; cursor:default; }
+
+  .underline-doodle{ display:block; width:100%; max-width:620px; margin: -2px auto 0; height:14px; }
+
+  /* ---- recent chips ---- */
+  .recents{
+    position:relative; z-index:2;
+    max-width:620px; margin: 2px auto 18px;
+    display:flex; flex-wrap:wrap; gap:8px; justify-content:center;
+  }
+  .recents button{
+    font-family:'Kalam',cursive;
+    font-size: 13px;
+    background: #fff;
+    border: 1.5px dashed #b7bcc4;
+    color:#40454d;
+    border-radius: 20px;
+    padding: 4px 12px;
+    cursor:pointer;
+  }
+  .recents button:hover{ border-color: var(--ink-blue); color: var(--ink-blue); }
+
+  /* ---- states ---- */
+  .empty-state, .loading-state{
+    position:relative; z-index:2;
+    text-align:center;
+    color:#8a909a;
+    padding: 60px 10px 20px;
+    font-size: 15px;
+  }
+  .loading-state{ color:#40454d; }
+  .scribble{ width:150px; height:50px; margin: 0 auto 14px; display:block; }
+  .scribble path{
+    stroke-dasharray: 400;
+    stroke-dashoffset: 400;
+    animation: draw 1.1s ease-in-out infinite alternate;
+  }
+  @keyframes draw{ to{ stroke-dashoffset: 0; } }
+
+  /* ---- cards grid ---- */
+  .grid{
+    position:relative; z-index:2;
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 22px 20px;
+    margin-top: 10px;
+  }
+  .card{
+    background: var(--c-bg);
+    border-radius: 3px;
+    padding: 16px 16px 18px;
+    box-shadow: 0 10px 18px -8px rgba(30,30,30,0.28);
+    position:relative;
+    transform: rotate(var(--r,0deg));
+    animation: pin-in .35s ease both;
+  }
+  @keyframes pin-in{
+    from{ opacity:0; transform: translateY(14px) rotate(var(--r,0deg)) scale(.97); }
+    to{ opacity:1; transform: translateY(0) rotate(var(--r,0deg)) scale(1); }
+  }
+  .card::before{ /* washi tape */
+    content:"";
+    position:absolute; top:-12px; left:50%;
+    width: 64px; height: 22px;
+    transform: translateX(-50%) rotate(-2deg);
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.08);
+  }
+  .card.wide{ grid-column: span 2; }
+  @media (max-width: 640px){ .card.wide{ grid-column: span 1; } }
+
+  .card h3{
+    font-family:'Permanent Marker', cursive;
+    font-size: 15px;
+    color: var(--c-ink);
+    margin: 4px 0 10px;
+    letter-spacing: .3px;
+  }
+  .card p, .card li{
+    font-size: 14px;
+    line-height:1.5;
+    color:#2c2f34;
+    font-family:'Inter',sans-serif;
+  }
+  .card ul{ margin:0; padding-left: 18px; }
+  .card li{ margin-bottom: 7px; }
+  .card li:last-child{ margin-bottom:0; }
+  .card .nome-item{ margin-bottom: 10px; }
+  .card .nome-item:last-child{ margin-bottom:0; }
+  .card .nome-nome{ font-weight:800; color: var(--c-ink); display:block; font-size:14.5px;}
+  .card .nome-info{ color:#3a3d42; }
+  .card .op-item{ font-family:'Kalam',cursive; font-size:15px; color:#2c2f34; margin-bottom:10px; padding-left:16px; position:relative;}
+  .card .op-item::before{ content:"“"; position:absolute; left:0; top:-2px; font-size:18px; color: var(--c-ink); }
+  .card .op-item:last-child{ margin-bottom:0; }
+  .card .pergunta-item{ margin-bottom:9px; padding-left:20px; position:relative; }
+  .card .pergunta-item::before{ content:"?"; position:absolute; left:0; top:0; color: var(--c-ink); font-weight:800; }
+
+  .error-note{
+    position:relative; z-index:2;
+    max-width: 520px; margin: 20px auto 0;
+    background: var(--note-pink);
+    border-radius:4px;
+    padding:14px 18px;
+    font-size:14px;
+    color:#5c1a12;
+    text-align:center;
+  }
+
+  footer.hint{
+    position:relative; z-index:2;
+    text-align:center;
+    font-size:12px;
+    color:#9aa0a8;
+    margin-top:26px;
+  }
+</style>
+</head>
+<body>
+<div class="rig">
+  <div class="board-frame">
+    <div class="board" id="board">
+
+      <header>
+        <div class="brand">RAPO<span>RIZA</span>DOR</div>
+        <div class="tagline">Digite um assunto e monte repertório pra parecer que você domina o papo.</div>
+      </header>
+
+      <div class="search-row">
+        <input id="keyword" type="text" placeholder="ex: Fórmula 1, vinho, Nissan Kicks, mercado imobiliário..." maxlength="60" />
+        <button class="go-btn" id="goBtn">MONTAR</button>
+      </div>
+      <svg class="underline-doodle" viewBox="0 0 620 14" preserveAspectRatio="none">
+        <path d="M4 8 Q 150 2, 310 8 T 616 7" fill="none" stroke="#232323" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+
+      <div class="recents" id="recents"></div>
+
+      <div id="empty" class="empty-state">
+        O quadro está limpo. Escreva um tema ali em cima e aperte MONTAR.
+      </div>
+
+      <div id="loading" class="loading-state" style="display:none;">
+        <svg class="scribble" viewBox="0 0 150 50">
+          <path d="M5 40 Q 30 5, 55 30 T 100 25 T 145 15" fill="none" stroke="#1e40c9" stroke-width="4" stroke-linecap="round"/>
+        </svg>
+        Rabiscando o repertório...
+      </div>
+
+      <div id="errorBox"></div>
+
+      <div id="grid" class="grid"></div>
+
+      <footer class="hint" id="footerHint" style="display:none;">Anotações geradas por IA — confira antes de usar em algo crítico.</footer>
+    </div>
+  </div>
+</div>
+
+<script>
+const board = document.getElementById('board');
+const input = document.getElementById('keyword');
+const goBtn = document.getElementById('goBtn');
+const emptyState = document.getElementById('empty');
+const loadingState = document.getElementById('loading');
+const grid = document.getElementById('grid');
+const errorBox = document.getElementById('errorBox');
+const recentsBox = document.getElementById('recents');
+const footerHint = document.getElementById('footerHint');
+
+let recents = [];
+
+function renderRecents(){
+  recentsBox.innerHTML = '';
+  recents.slice(0,6).forEach(term => {
+    const b = document.createElement('button');
+    b.textContent = term;
+    b.onclick = () => { input.value = term; gerar(); };
+    recentsBox.appendChild(b);
+  });
+}
+
+function pushRecent(term){
+  recents = [term, ...recents.filter(t => t.toLowerCase() !== term.toLowerCase())];
+  renderRecents();
+}
+
+function setLoading(isLoading){
+  goBtn.disabled = isLoading;
+  loadingState.style.display = isLoading ? 'block' : 'none';
+  if(isLoading){
+    emptyState.style.display = 'none';
+    errorBox.innerHTML = '';
+  }
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML;
+}
+
+function cardTemplate(bg, ink, title, innerHtml, wide=false){
+  return `<div class="card ${wide ? 'wide':''}" style="--c-bg:${bg}; --c-ink:${ink};">
+    <h3>${title}</h3>
+    ${innerHtml}
+  </div>`;
+}
+
+function renderResultado(data, tema){
+  const rot = [-1.5, 1, -0.8, 1.6, -1.2, 0.9];
+  let html = '';
+
+  html += cardTemplate('var(--note-yellow)', 'var(--ink-black)', 'DEFINIÇÃO CURTA',
+    `<p>${escapeHtml(data.definicao_curta)}</p>`, true);
+
+  html += cardTemplate('var(--note-blue)', 'var(--ink-blue)', 'PRINCIPAIS TÓPICOS',
+    `<ul>${(data.principais_topicos||[]).map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>`);
+
+  html += cardTemplate('var(--note-pink)', 'var(--ink-red)', 'PRINCIPAIS NOMES',
+    `<div>${(data.principais_nomes||[]).map(n=>
+      `<div class="nome-item"><span class="nome-nome">${escapeHtml(n.nome)}</span><span class="nome-info">${escapeHtml(n.info)}</span></div>`
+    ).join('')}</div>`);
+
+  html += cardTemplate('var(--note-green)', 'var(--ink-green)', 'CURIOSIDADES',
+    `<ul>${(data.curiosidades||[]).map(c=>`<li>${escapeHtml(c)}</li>`).join('')}</ul>`);
+
+  html += cardTemplate('var(--note-lavender)', 'var(--ink-purple)', 'PERGUNTAS PRA FAZER',
+    `<div>${(data.perguntas||[]).map(p=>`<div class="pergunta-item">${escapeHtml(p)}</div>`).join('')}</div>`);
+
+  html += cardTemplate('var(--note-orange)', 'var(--ink-orange)', 'OPINIÃO PRA DAR',
+    `<div>${(data.opinioes||[]).map(o=>`<div class="op-item">${escapeHtml(o)}</div>`).join('')}</div>`);
+
+  grid.innerHTML = html;
+
+  // apply slight rotation variety
+  [...grid.children].forEach((el,i)=> el.style.setProperty('--r', rot[i % rot.length]+'deg'));
+
+  footerHint.style.display = 'block';
+}
+
+async function gerar(){
+  const tema = input.value.trim();
+  if(!tema) { input.focus(); return; }
+
+  setLoading(true);
+  grid.innerHTML = '';
+  footerHint.style.display = 'none';
+
+  const systemPrompt = `Você monta um "quadro de rapport" para alguém que precisa parecer que entende de um assunto durante uma ligação de vendas, mesmo sem ser especialista. Gere conteúdo curto, direto, fácil de ler em poucos segundos, em português do Brasil.
+
+Adapte o conteúdo ao TIPO de assunto:
+- Se for um setor/mercado: em "principais_nomes" liste as marcas/empresas mais faladas do setor, cada uma com uma frase de curiosidade real sobre ela.
+- Se for um produto específico (carro, celular etc): em "principais_nomes" liste a marca, o modelo/concorrentes diretos, cada um com uma info factual curta.
+- Se for comida/bebida: em "principais_nomes" liste país de origem, variações famosas ou marcas associadas, cada uma com uma curiosidade (história, como se faz, etc).
+- Se for um tema geral (esporte, hobby, tecnologia): liste os nomes/entidades mais relevantes e citados sobre o tema.
+
+Responda ESTRITAMENTE em JSON, sem markdown, sem texto antes ou depois, seguindo exatamente este schema:
+{
+  "definicao_curta": "string, 1-2 frases, explica o assunto de forma simples",
+  "principais_topicos": ["4 a 6 strings curtas, sub-temas que valem puxar assunto"],
+  "principais_nomes": [{"nome": "string", "info": "string curta, 1 frase"}] (3 a 5 itens),
+  "curiosidades": ["3 a 5 strings, fatos curiosos e verdadeiros sobre o assunto"],
+  "perguntas": ["4 a 6 perguntas curtas que a pessoa pode fazer ao interlocutor sobre o tema"],
+  "opinioes": ["3 a 5 frases curtas em primeira pessoa, opiniões plausíveis e neutras/positivas que a pessoa pode 'soltar' como se fossem dela"]
+}
+Todo o conteúdo deve ser factualmente correto e verificável. Nada de invenções sobre marcas ou fatos.`;
+
+  try{
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: `Assunto: ${tema}` }]
+      })
+    });
+
+    if(!response.ok){
+      throw new Error('Falha na requisição: ' + response.status);
+    }
+
+    const result = await response.json();
+    const textBlock = (result.content || []).find(b => b.type === 'text');
+    if(!textBlock){ throw new Error('Resposta sem conteúdo de texto.'); }
+
+    let clean = textBlock.text.trim().replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+    const data = JSON.parse(clean);
+
+    renderResultado(data, tema);
+    pushRecent(tema);
+
+  } catch(err){
+    console.error(err);
+    errorBox.innerHTML = `<div class="error-note">Não consegui montar o quadro agora. Tenta de novo em alguns segundos.<br><small>${escapeHtml(err.message)}</small></div>`;
+  } finally {
+    setLoading(false);
+  }
+}
+
+goBtn.addEventListener('click', gerar);
+input.addEventListener('keydown', (e) => { if(e.key === 'Enter') gerar(); });
+</script>
+</body>
+</html>
